@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RCC>
+    <qresource prefix="/">
+        <!-- 图标资源 -->
+        <!-- <file>icons/app.ico</file> -->
+        
+        <!-- 样式表 -->
+        <!-- <file>styles/style.qss</file> -->
+    </qresource>
+</RCC>

@@ -98,7 +98,7 @@ Study::MultipleChoiceQuestion Study::getNextMultipleChoice() {
     };
 }
 
-bool Study::checkMultipleChoiceAnswer(const MultipleChoiceQuestion& question, int selectedIndex) {
+bool Study::checkMultipleChoiceAnswer(MultipleChoiceQuestion& question, int selectedIndex) {
     bool isCorrect = (selectedIndex == question.correctIndex);
     
     // 更新单词的学习统计
@@ -144,7 +144,7 @@ bool Study::checkSpelling(const std::string& input, const std::string& correct) 
     return true;
 }
 
-bool Study::checkSpellingAnswer(const SpellingQuestion& question, const std::string& userInput) {
+bool Study::checkSpellingAnswer(SpellingQuestion& question, const std::string& userInput) {
     std::string correctAnswer = getAnswerText(question.word);
     bool isCorrect;
     

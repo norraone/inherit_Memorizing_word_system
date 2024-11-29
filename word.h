@@ -37,6 +37,8 @@ public:
     void incrementFrequency();
     void recordAttempt(bool correct);
     bool checkSpelling(const std::string& attempt) const;
+    // Increment correct count
+    void incrementCorrectCount();
 };
 
 #endif // WORD_H

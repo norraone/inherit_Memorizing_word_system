@@ -6,6 +6,7 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QLineEdit>
+#include <QStatusBar>
 #include "user.h"
 #include "vocabulary.h"
 #include "review.h"
@@ -29,6 +30,7 @@ private:
     QWidget* createVocabularyPage();
     QWidget* createReviewPage();
     QWidget* createStatisticsPage();
+    void createMenus();
     
     // UI Elements
     QLineEdit* usernameInput;
@@ -39,6 +41,7 @@ private:
 private slots:
     void handleLogin();
     void handleRegister();
+    void handleLoginSuccess(User* user);
     void startWordReview();
     void showStatistics();
     void manageVocabulary();

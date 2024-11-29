@@ -4,9 +4,11 @@
 #include <vector>
 #include <string>
 #include "word.h"
+#include "database.h"
 
 class Vocabulary {
 private:
+    Database db;  // 统一的数据库连接
     void initializeDatabase();
 
 public:

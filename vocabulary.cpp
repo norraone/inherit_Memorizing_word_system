@@ -2,52 +2,58 @@
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSqlError>
+#include <QDateTime>
 #include <QVariant>
-#include <random>
 #include <algorithm>
-#include <stdexcept>
+#include <random>
+#include <fstream>
+#include <sstream>
+
+void Vocabulary::initializeDatabase() {
+    QSqlQuery query;
+    
+    // 单词表
+    query.exec("CREATE TABLE IF NOT EXISTS words ("
+              "english TEXT PRIMARY KEY,"
+              "part_of_speech TEXT,"
+              "chinese TEXT,"
+              "frequency INTEGER DEFAULT 0,"
+              "correct_count INTEGER DEFAULT 0,"
+              "total_attempts INTEGER DEFAULT 0,"
+              "added_date TEXT DEFAULT CURRENT_TIMESTAMP"
+              ")");
+              
+    // 单词释义表
+    query.exec("CREATE TABLE IF NOT EXISTS word_definitions ("
+              "english TEXT,"
+              "definition_type TEXT,"  // definition, example, synonym, antonym
+              "content TEXT,"
+              "added_date TEXT DEFAULT CURRENT_TIMESTAMP,"
+              "PRIMARY KEY (english, definition_type, content),"
+              "FOREIGN KEY(english) REFERENCES words(english)"
+              ")");
+              
+    // 单词分类表
+    query.exec("CREATE TABLE IF NOT EXISTS word_categories ("
+              "english TEXT,"
+              "category TEXT,"
+              "added_date TEXT DEFAULT CURRENT_TIMESTAMP,"
+              "PRIMARY KEY (english, category),"
+              "FOREIGN KEY(english) REFERENCES words(english)"
+              ")");
+}
 
 Vocabulary::Vocabulary() {
+    QSqlDatabase db = Database::getConnection();
     initializeDatabase();
 }
 
-void Vocabulary::initializeDatabase() {
-    if (!QSqlDatabase::contains("vocabulary_connection")) {
-        QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "vocabulary_connection");
-        db.setDatabaseName("vocabulary.db");
-        
-        if (!db.open()) {
-            throw std::runtime_error("Failed to open vocabulary database: " + db.lastError().text().toStdString());
-        }
-
-        QSqlQuery query(db);
-        // Create main vocabulary table
-        query.exec("CREATE TABLE IF NOT EXISTS vocabulary ("
-                  "english TEXT PRIMARY KEY,"
-                  "part_of_speech TEXT,"
-                  "chinese TEXT,"
-                  "frequency INTEGER DEFAULT 0,"
-                  "correct_count INTEGER DEFAULT 0,"
-                  "total_attempts INTEGER DEFAULT 0"
-                  ")");
-
-        // Create wrong words table (links to main vocabulary)
-        query.exec("CREATE TABLE IF NOT EXISTS wrong_words ("
-                  "english TEXT PRIMARY KEY,"
-                  "added_date DATETIME DEFAULT CURRENT_TIMESTAMP,"
-                  "FOREIGN KEY (english) REFERENCES vocabulary(english)"
-                  ")");
-    }
-}
-
-void Vocabulary::addWord(const Word& word) {
-    QSqlDatabase db = QSqlDatabase::database("vocabulary_connection");
-    QSqlQuery query(db);
-    
-    query.prepare("INSERT OR REPLACE INTO vocabulary "
+bool Vocabulary::addWord(const Word& word) {
+    QSqlQuery query;
+    query.prepare("INSERT OR REPLACE INTO words "
                  "(english, part_of_speech, chinese, frequency, correct_count, total_attempts) "
                  "VALUES (?, ?, ?, ?, ?, ?)");
-    
+                 
     query.addBindValue(QString::fromStdString(word.getEnglish()));
     query.addBindValue(QString::fromStdString(word.getPartOfSpeech()));
     query.addBindValue(QString::fromStdString(word.getChinese()));
@@ -55,70 +61,133 @@ void Vocabulary::addWord(const Word& word) {
     query.addBindValue(word.getCorrectCount());
     query.addBindValue(word.getTotalAttempts());
     
-    if (!query.exec()) {
-        throw std::runtime_error("Failed to add word: " + query.lastError().text().toStdString());
-    }
+    return query.exec();
 }
 
-void Vocabulary::removeWord(const std::string& english) {
-    QSqlDatabase db = QSqlDatabase::database("vocabulary_connection");
-    QSqlQuery query(db);
+bool Vocabulary::removeWord(const std::string& english) {
+    QSqlQuery query;
     
-    // First remove from wrong_words if it exists there
-    query.prepare("DELETE FROM wrong_words WHERE english = ?");
+    // 首先删除相关的释义和分类
+    query.exec("DELETE FROM word_definitions WHERE english = '" + 
+              QString::fromStdString(english) + "'");
+    query.exec("DELETE FROM word_categories WHERE english = '" + 
+              QString::fromStdString(english) + "'");
+    
+    // 然后删除单词本身
+    query.prepare("DELETE FROM words WHERE english = ?");
     query.addBindValue(QString::fromStdString(english));
-    query.exec();
     
-    // Then remove from vocabulary
-    query.prepare("DELETE FROM vocabulary WHERE english = ?");
-    query.addBindValue(QString::fromStdString(english));
-    
-    if (!query.exec()) {
-        throw std::runtime_error("Failed to remove word: " + query.lastError().text().toStdString());
-    }
+    return query.exec();
 }
 
-void Vocabulary::modifyWord(const std::string& english, const Word& newWord) {
-    // Simply use addWord as it handles REPLACE
-    addWord(newWord);
+bool Vocabulary::modifyWord(const std::string& english, const Word& newWord) {
+    // 如果是修改英文单词本身，需要特殊处理
+    if (english != newWord.getEnglish()) {
+        // 先删除旧单词
+        removeWord(english);
+        // 添加新单词
+        return addWord(newWord);
+    }
+    
+    // 否则直接更新其他信息
+    return addWord(newWord);  // 使用 INSERT OR REPLACE
 }
 
 Word* Vocabulary::findWord(const std::string& english) {
-    QSqlDatabase db = QSqlDatabase::database("vocabulary_connection");
-    QSqlQuery query(db);
-    
-    query.prepare("SELECT * FROM vocabulary WHERE english = ?");
+    QSqlQuery query;
+    query.prepare("SELECT * FROM words WHERE english = ?");
     query.addBindValue(QString::fromStdString(english));
     
     if (query.exec() && query.next()) {
         Word* word = new Word(
-            english,
+            query.value("english").toString().toStdString(),
             query.value("part_of_speech").toString().toStdString(),
             query.value("chinese").toString().toStdString()
         );
+        
         word->setFrequency(query.value("frequency").toInt());
         word->setCorrectCount(query.value("correct_count").toInt());
         word->setTotalAttempts(query.value("total_attempts").toInt());
+        
         return word;
     }
+    
     return nullptr;
 }
 
+bool Vocabulary::addDefinition(const std::string& english, const std::string& newDefinition) {
+    return addWordDefinition(english, "definition", newDefinition);
+}
+
+bool Vocabulary::addExample(const std::string& english, const std::string& example) {
+    return addWordDefinition(english, "example", example);
+}
+
+bool Vocabulary::addSynonym(const std::string& english, const std::string& synonym) {
+    return addWordDefinition(english, "synonym", synonym);
+}
+
+bool Vocabulary::addAntonym(const std::string& english, const std::string& antonym) {
+    return addWordDefinition(english, "antonym", antonym);
+}
+
+bool Vocabulary::addWordDefinition(const std::string& english, 
+                                 const std::string& type, 
+                                 const std::string& content) {
+    // 检查单词是否存在
+    if (!findWord(english)) {
+        return false;
+    }
+    
+    QSqlQuery query;
+    query.prepare("INSERT OR REPLACE INTO word_definitions "
+                 "(english, definition_type, content) VALUES (?, ?, ?)");
+                 
+    query.addBindValue(QString::fromStdString(english));
+    query.addBindValue(QString::fromStdString(type));
+    query.addBindValue(QString::fromStdString(content));
+    
+    return query.exec();
+}
+
+std::vector<Word> Vocabulary::searchWords(const std::string& keyword) {
+    std::vector<Word> results;
+    QSqlQuery query;
+    
+    // 搜索英文、中文和词性
+    query.prepare("SELECT * FROM words WHERE "
+                 "english LIKE ? OR "
+                 "chinese LIKE ? OR "
+                 "part_of_speech LIKE ?");
+                 
+    QString pattern = "%" + QString::fromStdString(keyword) + "%";
+    query.addBindValue(pattern);
+    query.addBindValue(pattern);
+    query.addBindValue(pattern);
+    
+    if (query.exec()) {
+        while (query.next()) {
+            Word word(
+                query.value("english").toString().toStdString(),
+                query.value("part_of_speech").toString().toStdString(),
+                query.value("chinese").toString().toStdString()
+            );
+            
+            word.setFrequency(query.value("frequency").toInt());
+            word.setCorrectCount(query.value("correct_count").toInt());
+            word.setTotalAttempts(query.value("total_attempts").toInt());
+            
+            results.push_back(word);
+        }
+    }
+    
+    return results;
+}
+
 std::vector<Word> Vocabulary::getRandomWords(int count) {
-    QSqlDatabase db = QSqlDatabase::database("vocabulary_connection");
-    QSqlQuery query(db);
+    std::vector<Word> allWords;
+    QSqlQuery query("SELECT * FROM words");
     
-    // Get total count of words
-    query.exec("SELECT COUNT(*) FROM vocabulary");
-    query.next();
-    int totalWords = query.value(0).toInt();
-    count = std::min(count, totalWords);
-    
-    // Get random words
-    query.prepare("SELECT * FROM vocabulary ORDER BY RANDOM() LIMIT ?");
-    query.addBindValue(count);
-    
-    std::vector<Word> words;
     if (query.exec()) {
         while (query.next()) {
             Word word(
@@ -126,135 +195,90 @@ std::vector<Word> Vocabulary::getRandomWords(int count) {
                 query.value("part_of_speech").toString().toStdString(),
                 query.value("chinese").toString().toStdString()
             );
+            
             word.setFrequency(query.value("frequency").toInt());
             word.setCorrectCount(query.value("correct_count").toInt());
             word.setTotalAttempts(query.value("total_attempts").toInt());
-            words.push_back(word);
+            
+            allWords.push_back(word);
         }
     }
-    return words;
-}
-
-void Vocabulary::addToWrongWords(const Word& word) {
-    QSqlDatabase db = QSqlDatabase::database("vocabulary_connection");
-    QSqlQuery query(db);
     
-    // First ensure word exists in vocabulary
-    addWord(word);
+    // 随机打乱
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::shuffle(allWords.begin(), allWords.end(), gen);
     
-    // Then add to wrong_words
-    query.prepare("INSERT OR REPLACE INTO wrong_words (english) VALUES (?)");
-    query.addBindValue(QString::fromStdString(word.getEnglish()));
-    
-    if (!query.exec()) {
-        throw std::runtime_error("Failed to add to wrong words: " + query.lastError().text().toStdString());
+    // 返回指定数量的单词
+    if (count > static_cast<int>(allWords.size())) {
+        count = static_cast<int>(allWords.size());
     }
+    
+    return std::vector<Word>(allWords.begin(), allWords.begin() + count);
 }
 
-void Vocabulary::removeFromWrongWords(const Word& word) {
-    QSqlDatabase db = QSqlDatabase::database("vocabulary_connection");
-    QSqlQuery query(db);
-    
-    query.prepare("DELETE FROM wrong_words WHERE english = ?");
-    query.addBindValue(QString::fromStdString(word.getEnglish()));
-    
-    if (!query.exec()) {
-        throw std::runtime_error("Failed to remove from wrong words: " + query.lastError().text().toStdString());
+bool Vocabulary::importFromFile(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        return false;
     }
+    
+    std::string line;
+    while (std::getline(file, line)) {
+        std::istringstream iss(line);
+        std::string english, pos, chinese;
+        
+        // 假设文件格式为：英文,词性,中文
+        if (std::getline(iss, english, ',') &&
+            std::getline(iss, pos, ',') &&
+            std::getline(iss, chinese)) {
+            
+            Word word(english, pos, chinese);
+            addWord(word);
+        }
+    }
+    
+    file.close();
+    return true;
 }
 
-std::vector<Word> Vocabulary::getWrongWords() {
-    QSqlDatabase db = QSqlDatabase::database("vocabulary_connection");
-    QSqlQuery query(db);
+bool Vocabulary::exportToFile(const std::string& filename) const {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        return false;
+    }
     
-    query.prepare("SELECT v.* FROM vocabulary v "
-                 "INNER JOIN wrong_words w ON v.english = w.english "
-                 "ORDER BY w.added_date DESC");
-    
-    std::vector<Word> wrongWords;
+    QSqlQuery query("SELECT * FROM words");
     if (query.exec()) {
         while (query.next()) {
-            Word word(
-                query.value("english").toString().toStdString(),
-                query.value("part_of_speech").toString().toStdString(),
-                query.value("chinese").toString().toStdString()
-            );
-            word.setFrequency(query.value("frequency").toInt());
-            word.setCorrectCount(query.value("correct_count").toInt());
-            word.setTotalAttempts(query.value("total_attempts").toInt());
-            wrongWords.push_back(word);
+            file << query.value("english").toString().toStdString() << ","
+                 << query.value("part_of_speech").toString().toStdString() << ","
+                 << query.value("chinese").toString().toStdString() << "\n";
         }
     }
-    return wrongWords;
+    
+    file.close();
+    return true;
 }
 
+// 词库统计方法
 int Vocabulary::getTotalWords() const {
-    QSqlDatabase db = QSqlDatabase::database("vocabulary_connection");
-    QSqlQuery query(db);
-    
-    query.exec("SELECT COUNT(*) FROM vocabulary");
-    query.next();
-    return query.value(0).toInt();
+    QSqlQuery query("SELECT COUNT(*) FROM words");
+    if (query.exec() && query.next()) {
+        return query.value(0).toInt();
+    }
+    return 0;
 }
 
-int Vocabulary::getWrongWordsCount() const {
-    QSqlDatabase db = QSqlDatabase::database("vocabulary_connection");
-    QSqlQuery query(db);
+std::vector<std::string> Vocabulary::getAllPartsOfSpeech() const {
+    std::vector<std::string> parts;
+    QSqlQuery query("SELECT DISTINCT part_of_speech FROM words");
     
-    query.exec("SELECT COUNT(*) FROM wrong_words");
-    query.next();
-    return query.value(0).toInt();
-}
-
-// Additional utility functions for word statistics
-std::vector<Word> Vocabulary::getMostFrequentWords(int limit) {
-    QSqlDatabase db = QSqlDatabase::database("vocabulary_connection");
-    QSqlQuery query(db);
-    
-    query.prepare("SELECT * FROM vocabulary ORDER BY frequency DESC LIMIT ?");
-    query.addBindValue(limit);
-    
-    std::vector<Word> words;
     if (query.exec()) {
         while (query.next()) {
-            Word word(
-                query.value("english").toString().toStdString(),
-                query.value("part_of_speech").toString().toStdString(),
-                query.value("chinese").toString().toStdString()
-            );
-            word.setFrequency(query.value("frequency").toInt());
-            word.setCorrectCount(query.value("correct_count").toInt());
-            word.setTotalAttempts(query.value("total_attempts").toInt());
-            words.push_back(word);
+            parts.push_back(query.value(0).toString().toStdString());
         }
     }
-    return words;
-}
-
-std::vector<Word> Vocabulary::getMostDifficultWords(int limit) {
-    QSqlDatabase db = QSqlDatabase::database("vocabulary_connection");
-    QSqlQuery query(db);
     
-    query.prepare("SELECT *, CAST(correct_count AS FLOAT) / NULLIF(total_attempts, 0) as success_rate "
-                 "FROM vocabulary "
-                 "WHERE total_attempts > 0 "
-                 "ORDER BY success_rate ASC "
-                 "LIMIT ?");
-    query.addBindValue(limit);
-    
-    std::vector<Word> words;
-    if (query.exec()) {
-        while (query.next()) {
-            Word word(
-                query.value("english").toString().toStdString(),
-                query.value("part_of_speech").toString().toStdString(),
-                query.value("chinese").toString().toStdString()
-            );
-            word.setFrequency(query.value("frequency").toInt());
-            word.setCorrectCount(query.value("correct_count").toInt());
-            word.setTotalAttempts(query.value("total_attempts").toInt());
-            words.push_back(word);
-        }
-    }
-    return words;
+    return parts;
 }

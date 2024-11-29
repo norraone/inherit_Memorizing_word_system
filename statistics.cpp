@@ -4,6 +4,7 @@
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QDateTime>
+#include <QVariant>
 
 Statistics::Statistics(User& u) 
     : user(u), totalScore(0), todayScore(0) {
@@ -53,11 +54,11 @@ void Statistics::updateScore(bool isCorrect) {
                  "(username, date, score, correct_count, wrong_count) "
                  "VALUES (?, ?, ?, ?, ?)");
                  
-    query.addBindValue(QString::fromStdString(user.getUsername()));
-    query.addBindValue(today);
-    query.addBindValue(todayScore);
-    query.addBindValue(isCorrect ? 1 : 0);
-    query.addBindValue(isCorrect ? 0 : 1);
+    query.addBindValue(QVariant(QString::fromStdString(user.getUsername())));
+    query.addBindValue(QVariant(today));
+    query.addBindValue(QVariant(todayScore));
+    query.addBindValue(QVariant(isCorrect ? 1 : 0));
+    query.addBindValue(QVariant(isCorrect ? 0 : 1));
     
     query.exec();
 }

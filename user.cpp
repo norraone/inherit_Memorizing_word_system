@@ -25,10 +25,21 @@ void User::initializeDatabase() {
                       
             // 学习记录表
             query.exec("CREATE TABLE IF NOT EXISTS learning_records ("
+                      "id INTEGER PRIMARY KEY AUTOINCREMENT,"
                       "username TEXT,"
                       "word TEXT,"
                       "correct INTEGER,"
-                      "timestamp TEXT DEFAULT CURRENT_TIMESTAMP,"
+                      "date TEXT,"
+                      "FOREIGN KEY(username) REFERENCES users(username)"
+                      ")");
+            
+            // 打卡记录表
+            query.exec("CREATE TABLE IF NOT EXISTS checkin_records ("
+                      "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                      "username TEXT,"
+                      "date TEXT,"
+                      "streak_count INTEGER,"
+                      "with_learning INTEGER,"
                       "FOREIGN KEY(username) REFERENCES users(username)"
                       ")");
             
@@ -223,189 +234,112 @@ bool User::saveToDatabase() {
     return query.exec();
 }
 
-User::User() : totalScore(0), daysStreak(0), totalWordsLearned(0), lastCheckInDate(""), isLoggedIn(false) {
-    initializeDatabase();
-}
-
-User::User(const std::string& uname, const std::string& pwd)
-    : username(uname), password(hashPassword(pwd)),
-      totalScore(0), daysStreak(0), totalWordsLearned(0), lastCheckInDate(""), isLoggedIn(false) {
-    initializeDatabase();
-}
-
-User::~User() {
-    // 析构函数不需要关闭数据库，因为它是静态的
-}
-
-// 静态成员初始化
-QSqlDatabase User::db;
-bool User::dbInitialized = false;
-
-// Getters
-std::string User::getUsername() const { return username; }
-int User::getTotalScore() const { return totalScore; }
-int User::getDaysStreak() const { return daysStreak; }
-int User::getTotalWordsLearned() const { return totalWordsLearned; }
-std::string User::getLastCheckInDate() const { return lastCheckInDate; }
-
-// 学习进度更新
 void User::updateScore(int points) {
     totalScore += points;
     saveToDatabase();
 }
 
-void User::incrementDaysStreak() {
-    daysStreak++;
-    saveToDatabase();
-}
-
-void User::resetDaysStreak() {
-    daysStreak = 0;
-    saveToDatabase();
-}
-
 void User::incrementWordsLearned() {
-    totalWordsLearned++;
+    ++totalWordsLearned;
     saveToDatabase();
 }
 
-// 学习记录
 bool User::addLearningRecord(const LearningRecord& record) {
     QSqlQuery query;
-    query.prepare("INSERT INTO learning_records (username, word, correct) VALUES (?, ?, ?)");
-    
-    query.addBindValue(QString::fromStdString(username));
-    query.addBindValue(QString::fromStdString(record.word));
-    query.addBindValue(record.correct);
+    query.prepare("INSERT INTO learning_records (username, word, correct, date) "
+                 "VALUES (:username, :word, :correct, :date)");
+    query.bindValue(":username", QString::fromStdString(username));
+    query.bindValue(":word", QString::fromStdString(record.word));
+    query.bindValue(":correct", record.correct);
+    query.bindValue(":date", QString::fromStdString(record.date));
     
     return query.exec();
 }
 
 std::vector<User::LearningRecord> User::getLearningHistory(int days) const {
-    std::vector<LearningRecord> history;
+    std::vector<LearningRecord> records;
     QSqlQuery query;
     
-    QString queryStr = "SELECT word, correct FROM learning_records "
-                      "WHERE username = ? AND timestamp >= date('now', '-%1 days') "
-                      "ORDER BY timestamp DESC";
+    QString queryStr = "SELECT word, correct, date FROM learning_records "
+                      "WHERE username = :username";
     
-    query.prepare(queryStr.arg(days));
-    query.addBindValue(QString::fromStdString(username));
+    if (days > 0) {
+        queryStr += " AND date >= date('now', '-" + QString::number(days) + " days')";
+    }
+    
+    queryStr += " ORDER BY date DESC";
+    
+    query.prepare(queryStr);
+    query.bindValue(":username", QString::fromStdString(username));
     
     if (query.exec()) {
         while (query.next()) {
             LearningRecord record;
-            record.word = query.value("word").toString().toStdString();
-            record.correct = query.value("correct").toInt();
-            history.push_back(record);
+            record.word = query.value(0).toString().toStdString();
+            record.correct = query.value(1).toBool();
+            record.date = query.value(2).toString().toStdString();
+            records.push_back(record);
         }
     }
     
-    return history;
-}
-
-// 打卡相关方法
-bool User::checkIn() {
-    if (hasCheckedInToday()) {
-        return false;  // 今天已经打卡
-    }
-
-    QDate currentDate = QDate::currentDate();
-    QDate lastDate = QDate::fromString(QString::fromStdString(lastCheckInDate), "yyyy-MM-dd");
-    
-    // 检查是否需要重置连续打卡
-    if (needResetStreak()) {
-        resetDaysStreak();
-    }
-    
-    // 更新打卡信息
-    incrementDaysStreak();
-    lastCheckInDate = currentDate.toString("yyyy-MM-dd").toStdString();
-    
-    // 记录打卡
-    bool withLearning = (totalWordsLearned > 0);  // 今天是否学习了单词
-    return addCheckInRecord(withLearning);
-}
-
-bool User::hasCheckedInToday() const {
-    if (lastCheckInDate.empty()) {
-        return false;
-    }
-    
-    QDate currentDate = QDate::currentDate();
-    QDate lastDate = QDate::fromString(QString::fromStdString(lastCheckInDate), "yyyy-MM-dd");
-    return currentDate == lastDate;
-}
-
-int User::getMissedDays() const {
-    if (lastCheckInDate.empty()) {
-        return 0;
-    }
-    
-    QDate currentDate = QDate::currentDate();
-    QDate lastDate = QDate::fromString(QString::fromStdString(lastCheckInDate), "yyyy-MM-dd");
-    return lastDate.daysTo(currentDate) - 1;  // -1 因为今天还可以打卡
-}
-
-bool User::needResetStreak() const {
-    if (lastCheckInDate.empty()) {
-        return true;
-    }
-    
-    QDate currentDate = QDate::currentDate();
-    QDate lastDate = QDate::fromString(QString::fromStdString(lastCheckInDate), "yyyy-MM-dd");
-    return lastDate.daysTo(currentDate) > 1;  // 超过1天没打卡就需要重置
+    return records;
 }
 
 bool User::addCheckInRecord(bool withLearning) {
     QSqlQuery query;
     query.prepare("INSERT INTO checkin_records (username, date, streak_count, with_learning) "
-                 "VALUES (?, ?, ?, ?)");
-    
-    query.addBindValue(QString::fromStdString(username));
-    query.addBindValue(QDate::currentDate().toString("yyyy-MM-dd"));
-    query.addBindValue(daysStreak);
-    query.addBindValue(withLearning);
+                 "VALUES (:username, date('now'), :streak_count, :with_learning)");
+    query.bindValue(":username", QString::fromStdString(username));
+    query.bindValue(":streak_count", daysStreak);
+    query.bindValue(":with_learning", withLearning);
     
     return query.exec();
 }
 
 std::vector<User::CheckInRecord> User::getCheckInHistory(int days) const {
-    std::vector<CheckInRecord> history;
+    std::vector<CheckInRecord> records;
     QSqlQuery query;
     
     QString queryStr = "SELECT date, streak_count, with_learning FROM checkin_records "
-                      "WHERE username = ? AND date >= date('now', '-%1 days') "
-                      "ORDER BY date DESC";
+                      "WHERE username = :username";
     
-    query.prepare(queryStr.arg(days));
-    query.addBindValue(QString::fromStdString(username));
+    if (days > 0) {
+        queryStr += " AND date >= date('now', '-" + QString::number(days) + " days')";
+    }
+    
+    queryStr += " ORDER BY date DESC";
+    
+    query.prepare(queryStr);
+    query.bindValue(":username", QString::fromStdString(username));
     
     if (query.exec()) {
         while (query.next()) {
             CheckInRecord record;
-            record.date = query.value("date").toString().toStdString();
-            record.streakCount = query.value("streak_count").toInt();
-            record.withLearning = query.value("with_learning").toBool();
-            history.push_back(record);
+            record.date = query.value(0).toString().toStdString();
+            record.streakCount = query.value(1).toInt();
+            record.withLearning = query.value(2).toBool();
+            records.push_back(record);
         }
     }
     
-    return history;
+    return records;
 }
 
 int User::getMonthlyCheckInCount() const {
     QSqlQuery query;
-    QString queryStr = "SELECT COUNT(*) FROM checkin_records "
-                      "WHERE username = ? AND "
-                      "date >= date('now', 'start of month') AND "
-                      "date <= date('now', 'end of month')";
-    
-    query.prepare(queryStr);
-    query.addBindValue(QString::fromStdString(username));
+    query.prepare("SELECT COUNT(*) FROM checkin_records "
+                 "WHERE username = :username "
+                 "AND date >= date('now', 'start of month')");
+    query.bindValue(":username", QString::fromStdString(username));
     
     if (query.exec() && query.next()) {
         return query.value(0).toInt();
     }
     return 0;
+}
+
+User::~User() {
+    if (isLoggedIn) {
+        logout();
+    }
 }

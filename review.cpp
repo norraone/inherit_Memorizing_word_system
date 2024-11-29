@@ -11,7 +11,7 @@ void Review::startWrongWordsReview(int wordCount) {
     std::vector<Word> wrongWords = stats.getWrongWords();
     
     // 如果错题数量不足，就全部使用
-    if (wordCount > wrongWords.size()) {
+    if (static_cast<size_t>(wordCount) > wrongWords.size()) {
         reviewWords = wrongWords;
     } else {
         // 随机选择指定数量的错题
@@ -30,8 +30,10 @@ std::string Review::getRandomEncouragement() const {
         return "做得好！";
     }
     
+    static std::random_device rd;
+    static std::mt19937 rng(rd());
     std::uniform_int_distribution<> dis(0, encouragements.size() - 1);
-    return encouragements[dis(gen)];
+    return encouragements[dis(rng)];
 }
 
 bool Review::isAllCorrect() const {

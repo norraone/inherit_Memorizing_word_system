@@ -32,6 +32,10 @@ void Word::recordAttempt(bool correct) {
     if (correct) correctCount++;
 }
 
+void Word::incrementCorrectCount() {
+    correctCount++;
+}
+
 bool Word::checkSpelling(const std::string& attempt) const {
     return attempt == english;
 }

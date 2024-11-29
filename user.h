@@ -4,10 +4,13 @@
 #include <string>
 #include <vector>
 #include <QSqlDatabase>
-#include <QSqlQuery>
+#include "database.h"
 
 class User {
 private:
+    static QSqlDatabase db;
+    static bool dbInitialized;
+    
     std::string username;
     std::string password;  // 存储哈希后的密码
     int totalScore;
@@ -15,9 +18,6 @@ private:
     int totalWordsLearned;
     std::string lastCheckInDate;
     bool isLoggedIn;
-    
-    static QSqlDatabase db;
-    static bool dbInitialized;
     
     // 数据库初始化
     static void initializeDatabase();
@@ -33,6 +33,20 @@ private:
     
     // 加载用户数据
     bool loadUserData();
+    
+    // 学习记录结构
+    struct LearningRecord {
+        std::string date;
+        std::string word;
+        bool correct;
+    };
+    
+    // 打卡记录结构
+    struct CheckInRecord {
+        std::string date;
+        bool withLearning;
+        int streakCount;
+    };
 
 public:
     User();
@@ -78,8 +92,12 @@ public:
     std::string getLastCheckInDate() const { return lastCheckInDate; }
     
     // 学习记录更新
+    void updateScore(int points);
     void updateLearningRecord(const std::string& word, bool correct);
     void incrementTotalWordsLearned();
+    void incrementWordsLearned();
+    bool addLearningRecord(const LearningRecord& record);
+    std::vector<LearningRecord> getLearningHistory(int days) const;
     
     // 打卡相关
     bool checkIn();
@@ -88,6 +106,9 @@ public:
     bool needResetStreak() const;
     void resetDaysStreak() { daysStreak = 0; }
     void incrementDaysStreak() { ++daysStreak; }
+    bool addCheckInRecord(bool withLearning);
+    std::vector<CheckInRecord> getCheckInHistory(int days) const;
+    int getMonthlyCheckInCount() const;
     
     // 数据库操作
     bool saveToDatabase();
