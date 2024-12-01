@@ -1,108 +1,120 @@
 cmake_minimum_required(VERSION 3.15)
-project(WordMemorizationSystem VERSION 1.0.0 LANGUAGES CXX)
+project(inherit_memorizing_word_system VERSION 1.0.0 LANGUAGES CXX)
 
-# 设置 C++ 标准和编译选项
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-# Qt 自动处理
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
+set(CMAKE_PREFIX_PATH "C:/Qt/Qt5.14.2/5.14.2/mingw73_64")
 
-# 设置编译选项
+# Find Qt packages
+find_package(Qt5 COMPONENTS 
+    Core
+    Gui
+    Widgets
+    Sql
+    Charts
+    REQUIRED
+)
+
+# Set warning flags
 if(MSVC)
     add_compile_options(/W4 /WX)
 else()
     add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 endif()
 
-# 设置 Qt 路径
-set(CMAKE_PREFIX_PATH "C:/Qt/Qt5.14.2/5.14.2/mingw73_64")
-
-# 查找 Qt 包
-find_package(Qt5 COMPONENTS
-    Core
-    Gui
-    Widgets
-    Sql
-    REQUIRED
-)
-
-# 源文件
+# Source files
 set(SOURCES
     main.cpp
-    mainwindow.cpp
-    user.cpp
-    word.cpp
-    vocabulary.cpp
-    review.cpp
-    statistics.cpp
-    study.cpp
-    views/LoginView.cpp
-    views/VocabularyView.cpp
-    views/ReviewView.cpp
-    views/StatisticsView.cpp
-)
-
-# 头文件
-set(HEADERS
-    mainwindow.h
-    user.h
-    word.h
-    vocabulary.h
-    review.h
-    statistics.h
-    database.h
-    views/LoginView.h
-    views/VocabularyView.h
-    views/ReviewView.h
-    views/StatisticsView.h
-)
-
-# 资源文件
-set(RESOURCES
+    
+    # Models
+    models/user.cpp
+    models/word.cpp
+    models/review_session.cpp
+    
+    # Repositories
+    repositories/base_repository.cpp
+    repositories/user_repository.cpp
+    repositories/word_repository.cpp
+    
+    # Services
+    services/user_service.cpp
+    services/word_service.cpp
+    services/review_service.cpp
+    services/statistics_service.cpp
+    
+    # UI Views
+    ui/views/login_view.cpp
+    ui/views/vocabulary_view.cpp
+    ui/views/review_view.cpp
+    ui/views/statistics_view.cpp
+    
+    # Resources
     resources.qrc
 )
 
-# 创建可执行文件
-add_executable(${PROJECT_NAME} 
-    ${SOURCES} 
-    ${HEADERS}
-    ${RESOURCES}
+# Header files
+set(HEADERS
+    # Models
+    models/user.h
+    models/word.h
+    models/review_session.h
+    
+    # Repositories
+    repositories/base_repository.h
+    repositories/user_repository.h
+    repositories/word_repository.h
+    
+    # Services
+    services/user_service.h
+    services/word_service.h
+    services/review_service.h
+    services/statistics_service.h
+    
+    # UI Views
+    ui/views/login_view.h
+    ui/views/vocabulary_view.h
+    ui/views/review_view.h
+    ui/views/statistics_view.h
 )
 
-# 设置输出目录
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-)
+# Create executable
+add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 
-# 链接 Qt 库
+# Link Qt libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt5::Core
     Qt5::Gui
     Qt5::Widgets
     Qt5::Sql
+    Qt5::Charts
 )
 
-# 安装规则
+# Set include directories
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# Install rules
 install(TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib/static
 )
 
-# 复制 Qt DLL（仅在 Windows 上）
+# Copy Qt DLLs to output directory (Windows only)
 if(WIN32)
-    get_target_property(_qmake_executable Qt5::qmake IMPORTED_LOCATION)
-    get_filename_component(_qt_bin_dir "${_qmake_executable}" DIRECTORY)
-    
-    # 部署 Qt DLLs
+    get_target_property(QT_QMAKE_EXECUTABLE Qt5::qmake IMPORTED_LOCATION)
+    get_filename_component(QT_BIN_DIR "${QT_QMAKE_EXECUTABLE}" DIRECTORY)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND "${_qt_bin_dir}/windeployqt.exe"
-                --no-compiler-runtime
-                --no-translations
-                --no-opengl-sw
-                "$<TARGET_FILE:${PROJECT_NAME}>"
-        COMMENT "Deploying Qt dependencies..."
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${QT_BIN_DIR}/Qt5Core.dll
+            ${QT_BIN_DIR}/Qt5Gui.dll
+            ${QT_BIN_DIR}/Qt5Widgets.dll
+            ${QT_BIN_DIR}/Qt5Sql.dll
+            ${QT_BIN_DIR}/Qt5Charts.dll
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>
     )
 endif()

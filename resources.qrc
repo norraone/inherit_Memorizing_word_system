@@ -6,5 +6,11 @@
         
         <!-- 样式表 -->
         <!-- <file>styles/style.qss</file> -->
+        
+        <!-- Styles -->
+        <file>resources/styles/dark.qss</file>
+        
+        <!-- Icons -->
+        <file>resources/icons/down_arrow.png</file>
     </qresource>
 </RCC>
