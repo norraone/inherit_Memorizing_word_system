@@ -5,6 +5,7 @@
 #include <QLineEdit>
 #include <QComboBox>
 #include <QListWidget>
+#include <QPushButton>
 #include "../../models/word.h"
 
 class WordDialog : public QDialog {
@@ -22,8 +23,8 @@ private:
     QPushButton* addCategoryButton;
     QListWidget* categoriesList;
     
-    Word currentWord;
     bool isEditMode;
+    Word currentWord;
     
     void setupUi();
     void connectSignals();

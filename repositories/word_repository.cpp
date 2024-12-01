@@ -2,6 +2,7 @@
 #include <QSqlQuery>
 #include <QVariant>
 #include <QDateTime>
+#include <QDebug>
 
 std::optional<Word> WordRepository::findByEnglish(const std::string& english) {
     QSqlQuery query(db);
@@ -158,6 +159,7 @@ bool WordRepository::save(const Word& word) {
         return true;
     } catch (const std::exception& e) {
         db.rollback();
+        qDebug() << "Error saving word: " << e.what();
         return false;
     }
 }
@@ -232,6 +234,7 @@ bool WordRepository::update(const Word& word) {
         return true;
     } catch (const std::exception& e) {
         db.rollback();
+        qDebug() << "Error updating word: " << e.what();
         return false;
     }
 }
@@ -280,6 +283,7 @@ bool WordRepository::remove(const std::string& english) {
         return true;
     } catch (const std::exception& e) {
         db.rollback();
+        qDebug() << "Error removing word: " << e.what();
         return false;
     }
 }
@@ -316,6 +320,139 @@ std::vector<Word> WordRepository::getMostFrequentWords(int limit) {
     if (query.exec()) {
         while (query.next()) {
             auto word = findByEnglish(query.value("english").toString().toStdString());
+            if (word) {
+                words.push_back(*word);
+            }
+        }
+    }
+    
+    return words;
+}
+
+std::vector<WordRepository::WordStats> WordRepository::getWordStats(const std::string& username) {
+    QSqlQuery query(db);
+    query.prepare("SELECT w.english, COUNT(a.id) as attempts, "
+                 "SUM(CASE WHEN a.correct THEN 1 ELSE 0 END) as correct_count, "
+                 "w.frequency "
+                 "FROM words w "
+                 "LEFT JOIN attempts a ON w.id = a.word_id AND a.username = :username "
+                 "GROUP BY w.id");
+    query.bindValue(":username", QString::fromStdString(username));
+    
+    std::vector<WordStats> stats;
+    if (query.exec()) {
+        while (query.next()) {
+            WordStats stat;
+            stat.english = query.value("english").toString().toStdString();
+            stat.attempts = query.value("attempts").toInt();
+            stat.correctCount = query.value("correct_count").toInt();
+            stat.frequency = query.value("frequency").toInt();
+            stat.accuracy = stat.attempts > 0 ? static_cast<double>(stat.correctCount) / stat.attempts : 0.0;
+            stats.push_back(stat);
+        }
+    }
+    return stats;
+}
+
+std::vector<WordRepository::DailyStats> WordRepository::getDailyStats(
+    const std::string& username, 
+    const std::chrono::system_clock::time_point& date) {
+    
+    QSqlQuery query(db);
+    query.prepare("SELECT DATE(a.attempt_date) as date, "
+                 "COUNT(DISTINCT w.id) as words_learned, "
+                 "COUNT(a.id) as words_reviewed, "
+                 "AVG(CASE WHEN a.correct THEN 1 ELSE 0 END) as accuracy "
+                 "FROM attempts a "
+                 "JOIN words w ON w.id = a.word_id "
+                 "WHERE a.username = :username "
+                 "AND a.attempt_date >= :date "
+                 "GROUP BY DATE(a.attempt_date)");
+                 
+    query.bindValue(":username", QString::fromStdString(username));
+    query.bindValue(":date", QDateTime::fromSecsSinceEpoch(
+        std::chrono::system_clock::to_time_t(date)));
+    
+    std::vector<DailyStats> stats;
+    if (query.exec()) {
+        while (query.next()) {
+            DailyStats stat;
+            stat.date = std::chrono::system_clock::from_time_t(
+                query.value("date").toDateTime().toSecsSinceEpoch());
+            stat.wordsLearned = query.value("words_learned").toInt();
+            stat.wordsReviewed = query.value("words_reviewed").toInt();
+            stat.accuracy = query.value("accuracy").toDouble();
+            stats.push_back(stat);
+        }
+    }
+    return stats;
+}
+
+std::map<std::string, int> WordRepository::getWordCountByCategory() {
+    QSqlQuery query(db);
+    query.prepare("SELECT category, COUNT(*) as count "
+                 "FROM word_categories "
+                 "GROUP BY category");
+    
+    std::map<std::string, int> counts;
+    if (query.exec()) {
+        while (query.next()) {
+            std::string category = query.value("category").toString().toStdString();
+            int count = query.value("count").toInt();
+            counts[category] = count;
+        }
+    }
+    return counts;
+}
+
+std::vector<WordRepository::WordStats> WordRepository::getMostReviewedWords(int limit) {
+    QSqlQuery query(db);
+    query.prepare("SELECT w.english, COUNT(a.id) as attempts, "
+                 "SUM(CASE WHEN a.correct THEN 1 ELSE 0 END) as correct_count, "
+                 "w.frequency "
+                 "FROM words w "
+                 "LEFT JOIN attempts a ON w.id = a.word_id "
+                 "GROUP BY w.id "
+                 "ORDER BY attempts DESC "
+                 "LIMIT :limit");
+    query.bindValue(":limit", limit);
+    
+    std::vector<WordStats> stats;
+    if (query.exec()) {
+        while (query.next()) {
+            WordStats stat;
+            stat.english = query.value("english").toString().toStdString();
+            stat.attempts = query.value("attempts").toInt();
+            stat.correctCount = query.value("correct_count").toInt();
+            stat.frequency = query.value("frequency").toInt();
+            stat.accuracy = stat.attempts > 0 ? static_cast<double>(stat.correctCount) / stat.attempts : 0.0;
+            stats.push_back(stat);
+        }
+    }
+    return stats;
+}
+
+int WordRepository::getTotalReviewTime(const std::string& username) {
+    QSqlQuery query(db);
+    query.prepare("SELECT SUM(review_time_seconds) as total_time "
+                 "FROM attempts "
+                 "WHERE username = :username");
+    query.bindValue(":username", QString::fromStdString(username));
+    
+    if (query.exec() && query.next()) {
+        return query.value("total_time").toInt();
+    }
+    return 0;
+}
+
+std::vector<Word> WordRepository::getAllWords() {
+    std::vector<Word> words;
+    QSqlQuery query(db);
+    query.prepare("SELECT english FROM words");
+    
+    if (query.exec()) {
+        while (query.next()) {
+            auto word = findByEnglish(query.value(0).toString().toStdString());
             if (word) {
                 words.push_back(*word);
             }

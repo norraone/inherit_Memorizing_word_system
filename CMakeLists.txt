@@ -51,6 +51,9 @@ set(SOURCES
     ui/views/review_view.cpp
     ui/views/statistics_view.cpp
     
+    # UI Dialogs
+    ui/dialogs/word_dialog.cpp
+    
     # Resources
     resources.qrc
 )
@@ -78,10 +81,25 @@ set(HEADERS
     ui/views/vocabulary_view.h
     ui/views/review_view.h
     ui/views/statistics_view.h
+    
+    # UI Dialogs
+    ui/dialogs/word_dialog.h
 )
 
 # Create executable
-add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
+add_executable(${PROJECT_NAME} 
+    ${SOURCES} 
+    ${HEADERS}
+    ui/dialogs/word_dialog.h
+    ui/dialogs/word_dialog.cpp
+)
+
+# Ensure Qt MOC processing for dialog
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    AUTOMOC ON
+    AUTOUIC ON
+    AUTORCC ON
+)
 
 # Link Qt libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -104,10 +122,13 @@ install(TARGETS ${PROJECT_NAME}
     ARCHIVE DESTINATION lib/static
 )
 
-# Copy Qt DLLs to output directory (Windows only)
+# Copy Qt DLLs and plugins to output directory (Windows only)
 if(WIN32)
     get_target_property(QT_QMAKE_EXECUTABLE Qt5::qmake IMPORTED_LOCATION)
     get_filename_component(QT_BIN_DIR "${QT_QMAKE_EXECUTABLE}" DIRECTORY)
+    get_filename_component(QT_ROOT_DIR "${QT_BIN_DIR}" DIRECTORY)
+    
+    # Copy Qt DLLs
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${QT_BIN_DIR}/Qt5Core.dll
@@ -116,5 +137,32 @@ if(WIN32)
             ${QT_BIN_DIR}/Qt5Sql.dll
             ${QT_BIN_DIR}/Qt5Charts.dll
             $<TARGET_FILE_DIR:${PROJECT_NAME}>
+    )
+    
+    # Create platforms directory and copy platform plugins
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/platforms
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${QT_ROOT_DIR}/plugins/platforms/qwindows.dll
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/platforms
+    )
+    
+    # Create styles directory and copy style plugins
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/styles
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${QT_ROOT_DIR}/plugins/styles/qwindowsvistastyle.dll
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/styles
+    )
+    
+    # Create sqldrivers directory and copy SQL driver plugin
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/sqldrivers
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${QT_ROOT_DIR}/plugins/sqldrivers/qsqlite.dll
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/sqldrivers
     )
 endif()

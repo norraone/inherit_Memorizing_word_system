@@ -50,16 +50,16 @@ std::vector<StatisticsService::DailyStats> StatisticsService::getDailyStats(
         auto date = now - std::chrono::hours(24 * i);
         auto dayStats = wordRepository->getDailyStats(username, date);
         
-        DailyStats ds;
-        ds.date = date;
-        ds.wordsLearned = dayStats.wordsLearned;
-        ds.wordsReviewed = dayStats.wordsReviewed;
-        ds.correctCount = dayStats.correctCount;
-        ds.accuracy = dayStats.wordsReviewed > 0 
-            ? static_cast<double>(dayStats.correctCount) / dayStats.wordsReviewed 
-            : 0.0;
-            
-        stats.push_back(ds);
+        // Convert repository stats to service stats
+        for (const auto& ds : dayStats) {
+            DailyStats stat;
+            stat.date = ds.date;
+            stat.wordsLearned = ds.wordsLearned;
+            stat.wordsReviewed = ds.wordsReviewed;
+            stat.correctCount = static_cast<int>(ds.wordsReviewed * ds.accuracy);
+            stat.accuracy = ds.accuracy;
+            stats.push_back(stat);
+        }
     }
     
     return stats;
@@ -73,14 +73,11 @@ std::vector<StatisticsService::WordStats> StatisticsService::getWordStats(
     for (const auto& word : words) {
         WordStats ws;
         ws.english = word.english;
-        ws.chinese = word.chinese;
         ws.attempts = word.attempts;
         ws.correctCount = word.correctCount;
-        ws.accuracy = word.attempts > 0 
-            ? static_cast<double>(word.correctCount) / word.attempts 
-            : 0.0;
-        ws.lastReview = word.lastReview;
-        
+        ws.accuracy = word.accuracy;
+        // Note: chinese and lastReview are not available from repository
+        // These would need to be fetched separately if needed
         stats.push_back(ws);
     }
     
@@ -115,12 +112,11 @@ std::vector<StatisticsService::WordStats> StatisticsService::getMostReviewedWord
     
     for (const auto& word : words) {
         WordStats ws;
-        ws.english = word.getEnglish();
-        ws.chinese = word.getChinese();
-        ws.attempts = word.getStats().totalAttempts;
-        ws.correctCount = word.getStats().correctCount;
-        ws.accuracy = word.getStats().getAccuracy();
-        
+        ws.english = word.english;
+        ws.attempts = word.attempts;
+        ws.correctCount = word.correctCount;
+        ws.accuracy = word.accuracy;
+        // Note: chinese and lastReview are not available from repository
         stats.push_back(ws);
     }
     

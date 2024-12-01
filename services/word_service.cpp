@@ -81,3 +81,7 @@ int WordService::getLearnedWordsCount(const std::string& username) {
     // TODO: Implement this in repository
     return 0;
 }
+
+std::vector<Word> WordService::getAllWords() {
+    return repository->getAllWords();
+}

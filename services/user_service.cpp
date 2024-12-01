@@ -53,13 +53,13 @@ void UserService::updatePassword(const std::string& oldPassword, const std::stri
     }
     
     User updatedUser = *currentUser;
-    updatedUser.passwordHash = User::hashPassword(newPassword);
+    updatedUser.updatePassword(newPassword);
     
     if (!repository->update(updatedUser)) {
         throw std::runtime_error("更新密码失败");
     }
     
-    currentUser = updatedUser;
+    *currentUser = updatedUser;
 }
 
 void UserService::checkIn() {

@@ -28,6 +28,8 @@ public:
     double getUserAccuracy(const std::string& username);
     std::vector<Word> getDifficultWords(int limit = 10);
     int getLearnedWordsCount(const std::string& username);
+
+    std::vector<Word> getAllWords();
 };
 
 #endif // WORD_SERVICE_H

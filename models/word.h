@@ -43,6 +43,7 @@ public:
     const std::vector<std::string>& getCategories() const { return categories; }
     const std::vector<Definition>& getDefinitions() const { return definitions; }
     const LearningStats& getStats() const { return stats; }
+    LearningStats& getStats() { return stats; }
 
     // Setters
     void setEnglish(const std::string& eng) { english = eng; }

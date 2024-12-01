@@ -11,6 +11,7 @@
 #include <QBarCategoryAxis>
 #include <QValueAxis>
 #include <QDateTime>
+#include <QtCharts/QDateTimeAxis>
 
 StatisticsView::StatisticsView(StatisticsService* statsService,
                              UserService* userService,
@@ -188,7 +189,7 @@ void StatisticsView::updateTables() {
     auto difficultWords = statisticsService->getMostDifficultWords(10);
     difficultWordsTable->setRowCount(difficultWords.size());
     
-    for (int i = 0; i < difficultWords.size(); ++i) {
+    for (size_t i = 0; i < difficultWords.size(); ++i) {
         const auto& word = difficultWords[i];
         difficultWordsTable->setItem(i, 0, new QTableWidgetItem(
             QString::fromStdString(word.english)));
@@ -200,26 +201,26 @@ void StatisticsView::updateTables() {
         auto lastReview = QDateTime::fromTime_t(
             std::chrono::system_clock::to_time_t(word.lastReview));
         difficultWordsTable->setItem(i, 3, new QTableWidgetItem(
-            lastReview.toString("yyyy-MM-dd hh:mm")));
+            lastReview.toString("yyyy-MM-dd HH:mm")));
     }
     
     // Update recent activity table
-    auto dailyStats = statisticsService->getDailyStats(username, 7);
+    auto dailyStats = statisticsService->getDailyStats(username);
     recentActivityTable->setRowCount(dailyStats.size());
     
-    for (int i = 0; i < dailyStats.size(); ++i) {
-        const auto& stats = dailyStats[i];
+    for (size_t i = 0; i < dailyStats.size(); ++i) {
+        const auto& stat = dailyStats[i];
         auto date = QDateTime::fromTime_t(
-            std::chrono::system_clock::to_time_t(stats.date));
+            std::chrono::system_clock::to_time_t(stat.date));
         
         recentActivityTable->setItem(i, 0, new QTableWidgetItem(
             date.toString("yyyy-MM-dd")));
         recentActivityTable->setItem(i, 1, new QTableWidgetItem(
-            QString::number(stats.wordsLearned)));
+            QString::number(stat.wordsLearned)));
         recentActivityTable->setItem(i, 2, new QTableWidgetItem(
-            QString::number(stats.wordsReviewed)));
+            QString::number(stat.wordsReviewed)));
         recentActivityTable->setItem(i, 3, new QTableWidgetItem(
-            QString::number(stats.accuracy * 100, 'f', 1) + "%"));
+            QString::number(stat.accuracy * 100, 'f', 1) + "%"));
     }
     
     difficultWordsTable->resizeColumnsToContents();
@@ -240,7 +241,7 @@ QPieSeries* StatisticsView::createProgressPieSeries() {
 
 QLineSeries* StatisticsView::createAccuracyTrendSeries() {
     auto username = userService->getCurrentUser().getUsername();
-    auto dailyStats = statisticsService->getDailyStats(username, 7);
+    auto dailyStats = statisticsService->getDailyStats(username);
     
     auto* series = new QLineSeries();
     
@@ -289,7 +290,7 @@ void StatisticsView::onExportClicked() {
         "统计数据已成功导出到: " + fileName);
 }
 
-void StatisticsView::onPeriodChanged(const QString& period) {
-    // Update charts and tables based on selected period
+void StatisticsView::onPeriodChanged(const QString& /*period*/) {
+    // Implement period change logic if needed
     refreshStats();
 }

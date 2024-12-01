@@ -7,7 +7,7 @@
 #include <QMessageBox>
 
 WordDialog::WordDialog(QWidget* parent)
-    : QDialog(parent), isEditMode(false) {
+    : QDialog(parent), isEditMode(false), currentWord() {
     setupUi();
     connectSignals();
 }

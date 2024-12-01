@@ -19,7 +19,7 @@ void VocabularyView::setupUi() {
     // Search and filter bar
     auto* toolBar = new QHBoxLayout();
     searchBox = new QLineEdit(this);
-    searchBox->setPlaceholder("搜索单词...");
+    searchBox->setPlaceholderText("搜索单词...");
     categoryFilter = new QComboBox(this);
     categoryFilter->addItem("所有分类");
     // TODO: Load categories from database
@@ -158,12 +158,12 @@ void VocabularyView::confirmDeleteWord() {
     }
 }
 
-void VocabularyView::onSearchTextChanged(const QString& text) {
+void VocabularyView::onSearchTextChanged(const QString& /*text*/) {
     // TODO: Implement search filtering
     refreshWordList();
 }
 
-void VocabularyView::onCategoryFilterChanged(const QString& category) {
+void VocabularyView::onCategoryFilterChanged(const QString& /*category*/) {
     // TODO: Implement category filtering
     refreshWordList();
 }

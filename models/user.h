@@ -16,9 +16,17 @@ public:
         
         bool hasCheckedInToday() const {
             auto now = std::chrono::system_clock::now();
-            auto today = std::chrono::floor<std::chrono::days>(now);
-            auto lastCheckin = std::chrono::floor<std::chrono::days>(lastCheckinDate);
-            return today == lastCheckin;
+            // Convert to time_t for easier day comparison
+            auto now_t = std::chrono::system_clock::to_time_t(now);
+            auto last_t = std::chrono::system_clock::to_time_t(lastCheckinDate);
+            
+            // Convert to struct tm to compare year/month/day
+            struct tm now_tm = *localtime(&now_t);
+            struct tm last_tm = *localtime(&last_t);
+            
+            return (now_tm.tm_year == last_tm.tm_year &&
+                    now_tm.tm_mon == last_tm.tm_mon &&
+                    now_tm.tm_mday == last_tm.tm_mday);
         }
     };
 
@@ -41,10 +49,15 @@ public:
     void checkIn();
     void addScore(int points);
     void recordWordLearned();
+    
+    // Authentication methods
     bool verifyPassword(const std::string& password) const;
+    void updatePassword(const std::string& newPassword);
+    
+    // Password hashing
+    static std::string hashPassword(const std::string& password);
     
     // Static methods
-    static std::string hashPassword(const std::string& password);
     
     friend class UserRepository;  // Allow repository to access private members
 };

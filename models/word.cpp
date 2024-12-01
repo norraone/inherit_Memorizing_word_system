@@ -1,4 +1,8 @@
 #include "word.h"
+#include <algorithm>
+#include <chrono>
+#include <string>
+#include <vector>
 
 Word::Word(std::string eng, std::string pos, std::string chn)
     : english(std::move(eng)), partOfSpeech(std::move(pos)), chinese(std::move(chn)), addedDate(std::chrono::system_clock::now()) {}
@@ -23,8 +27,6 @@ void Word::addCategory(const std::string& category) {
 }
 
 void Word::removeCategory(const std::string& category) {
-    categories.erase(
-        std::remove(categories.begin(), categories.end(), category),
-        categories.end()
-    );
+    auto it = std::remove(categories.begin(), categories.end(), category);
+    categories.erase(it, categories.end());
 }

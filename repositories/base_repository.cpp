@@ -11,7 +11,7 @@
 // However, we can add some utility functions that might be useful for derived classes
 
 namespace {
-    void checkDatabaseError(const QSqlDatabase& db) {
+    [[maybe_unused]] void checkDatabaseError(const QSqlDatabase& db) {
         if (db.lastError().isValid()) {
             throw std::runtime_error(
                 QString("Database error: %1").arg(db.lastError().text()).toStdString()
