@@ -15,6 +15,11 @@ public:
         std::chrono::system_clock::time_point lastCheckinDate;
         
         bool hasCheckedInToday() const {
+            // If no previous check-in, return false
+            if (lastCheckinDate == std::chrono::system_clock::time_point()) {
+                return false;
+            }
+            
             auto now = std::chrono::system_clock::now();
             // Convert to time_t for easier day comparison
             auto now_t = std::chrono::system_clock::to_time_t(now);
@@ -44,11 +49,13 @@ public:
     const std::string& getUsername() const { return username; }
     const LearningStats& getStats() const { return stats; }
     std::chrono::system_clock::time_point getCreatedAt() const { return createdAt; }
+    const std::string& getPasswordHash() const { return passwordHash; }
     
     // Learning methods
     void checkIn();
     void addScore(int points);
     void recordWordLearned();
+    int calculateCheckInPoints() const;
     
     // Authentication methods
     bool verifyPassword(const std::string& password) const;

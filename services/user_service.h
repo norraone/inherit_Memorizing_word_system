@@ -25,7 +25,19 @@ public:
     void logout();
     void registerUser(const std::string& username, const std::string& password);
     bool isLoggedIn() const { return currentUser.has_value(); }
-    const User& getCurrentUser() const;
+    User& getCurrentUser() { 
+        if (!currentUser) {
+            throw AuthenticationError("用户未登录");
+        }
+        return *currentUser; 
+    }
+
+    const User& getCurrentUser() const { 
+        if (!currentUser) {
+            throw AuthenticationError("用户未登录");
+        }
+        return *currentUser; 
+    }
     
     // User operations
     void updatePassword(const std::string& oldPassword, const std::string& newPassword);

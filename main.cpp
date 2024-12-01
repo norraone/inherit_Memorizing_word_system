@@ -39,6 +39,9 @@
 #include <QSqlError>
 #include <QMessageBox>
 #include <QDebug>
+#include <QMainWindow>
+#include <QVBoxLayout>
+#include <QPushButton>
 #include "ui/views/login_view.h"
 #include "services/user_service.h"
 #include "services/word_service.h"
@@ -113,6 +116,22 @@ int main(int argc, char *argv[]) {
     // Initialize database schema
     QSqlQuery query;
     
+    // Users table
+    if (!query.exec("CREATE TABLE IF NOT EXISTS users ("
+                   "username TEXT PRIMARY KEY,"
+                   "password TEXT,"
+                   "total_score INTEGER DEFAULT 0,"
+                   "days_streak INTEGER DEFAULT 0,"
+                   "total_words_learned INTEGER DEFAULT 0,"
+                   "last_checkin_date TEXT,"
+                   "created_at TEXT"
+                   ")")) {
+        QMessageBox::critical(nullptr, "Database Error", 
+                            QString("Could not create users table. Error: %1")
+                            .arg(query.lastError().text()));
+        return 1;
+    }
+    
     // Words table
     if (!query.exec("CREATE TABLE IF NOT EXISTS words ("
                    "english TEXT PRIMARY KEY,"
@@ -162,6 +181,79 @@ int main(int argc, char *argv[]) {
     // Create and show login view
     LoginView loginView(userService.get());
     loginView.show();
+    
+    // Connect login success to main window creation
+    QObject::connect(&loginView, &LoginView::loginSuccessful, 
+        [&](const QString& username) {
+            // Create and show main selection window
+            auto mainWindow = new QMainWindow();
+            auto centralWidget = new QWidget(mainWindow);
+            auto layout = new QVBoxLayout(centralWidget);
+            
+            // Create buttons for different functionalities
+            auto learnWordButton = new QPushButton("学习单词", mainWindow);
+            auto reviewWordButton = new QPushButton("复习单词", mainWindow);
+            auto statisticsButton = new QPushButton("学习统计", mainWindow);
+            auto checkInButton = new QPushButton("每日签到", mainWindow);
+            
+            // Add buttons to layout
+            layout->addWidget(learnWordButton);
+            layout->addWidget(reviewWordButton);
+            layout->addWidget(statisticsButton);
+            layout->addWidget(checkInButton);
+            
+            mainWindow->setCentralWidget(centralWidget);
+            mainWindow->setWindowTitle(QString("单词记忆系统 - %1").arg(username));
+            mainWindow->resize(300, 400);
+            
+            // Connect button signals to respective views/services
+            QObject::connect(learnWordButton, &QPushButton::clicked, 
+                [wordService = wordService.get()]() {
+                    // TODO: Open word learning view
+                    QMessageBox::information(nullptr, "学习单词", "功能开发中");
+                });
+            
+            QObject::connect(reviewWordButton, &QPushButton::clicked, 
+                [reviewService = reviewService.get()]() {
+                    // TODO: Open word review view
+                    QMessageBox::information(nullptr, "复习单词", "功能开发中");
+                });
+            
+            QObject::connect(statisticsButton, &QPushButton::clicked, 
+                [statisticsService = statisticsService.get()]() {
+                    // TODO: Open statistics view
+                    QMessageBox::information(nullptr, "学习统计", "功能开发中");
+                });
+            
+            QObject::connect(checkInButton, &QPushButton::clicked, 
+                [userService = userService.get()]() {
+                    try {
+                        userService->checkIn();
+                        
+                        // Get the current user's stats
+                        const auto& currentUser = userService->getCurrentUser();
+                        const auto& stats = currentUser.getStats();
+                        
+                        // Create a detailed message
+                        QString message = QString(
+                            "签到成功！\n"
+                            "连续签到天数：%1 天\n"
+                            "获得积分：%2 分\n"
+                            "总积分：%3 分"
+                        ).arg(stats.daysStreak)
+                         .arg(currentUser.calculateCheckInPoints())
+                         .arg(stats.totalScore);
+                        
+                        QMessageBox::information(nullptr, "每日签到", message);
+                    } catch (const std::exception& e) {
+                        QMessageBox::warning(nullptr, "签到失败", e.what());
+                    }
+                });
+            
+            // Hide login view and show main window
+            loginView.hide();
+            mainWindow->show();
+        });
     
     return app.exec();
 }

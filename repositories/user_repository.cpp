@@ -2,6 +2,8 @@
 #include <QSqlQuery>
 #include <QVariant>
 #include <QDateTime>
+#include <QDebug>
+#include <QSqlError>
 
 std::optional<User> UserRepository::findByUsername(const std::string& username) {
     QSqlQuery query(db);
@@ -35,19 +37,28 @@ bool UserRepository::save(const User& user) {
         "VALUES (?, ?, ?, ?, ?, ?, ?)"
     );
     
-    query.addBindValue(QString::fromStdString(user.username));
-    query.addBindValue(QString::fromStdString(user.passwordHash));
-    query.addBindValue(user.stats.totalScore);
-    query.addBindValue(user.stats.daysStreak);
-    query.addBindValue(user.stats.totalWordsLearned);
+    query.addBindValue(QString::fromStdString(user.getUsername()));
+    query.addBindValue(QString::fromStdString(user.getPasswordHash()));
+    const auto& stats = user.getStats();
+    query.addBindValue(stats.totalScore);
+    query.addBindValue(stats.daysStreak);
+    query.addBindValue(stats.totalWordsLearned);
     query.addBindValue(QDateTime::fromSecsSinceEpoch(
-        std::chrono::system_clock::to_time_t(user.stats.lastCheckinDate))
+        std::chrono::system_clock::to_time_t(stats.lastCheckinDate))
         .toString(Qt::ISODate));
     query.addBindValue(QDateTime::fromSecsSinceEpoch(
-        std::chrono::system_clock::to_time_t(user.createdAt))
+        std::chrono::system_clock::to_time_t(user.getCreatedAt()))
         .toString(Qt::ISODate));
     
-    return query.exec();
+    if (!query.exec()) {
+        qDebug() << "User save failed:"
+                 << "Username:" << QString::fromStdString(user.getUsername())
+                 << "Error:" << query.lastError().text()
+                 << "SQL:" << query.lastQuery();
+        return false;
+    }
+    
+    return true;
 }
 
 bool UserRepository::update(const User& user) {
